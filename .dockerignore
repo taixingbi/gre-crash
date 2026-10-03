@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+.venv
+.data
+sources
+infra
+*.md
+.env*
+!.env.example

@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-source);
+  --font-serif: var(--font-fraunces);
+  --color-paper: #f3efe4;
+  --color-ink: #1b1914;
+  --color-muted: #5f584c;
+  --color-line: #ddd4c4;
+  --color-card: #faf7f1;
+  --color-pine: #1e4d3a;
+  --color-pine-dark: #143528;
+  --color-clay: #8d3d32;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-source), Georgia, sans-serif;
+}
+
+::selection {
+  background: #d7e4da;
+}
