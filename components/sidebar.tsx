@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { signOutAction } from "@/lib/actions";
 
 export type SidebarLesson = {
@@ -21,6 +21,15 @@ export type SidebarModule = {
   lessons: SidebarLesson[];
 };
 
+function readNavExpanded() {
+  return window.localStorage.getItem("gre-nav") !== "hidden";
+}
+
+function subscribeNav(onChange: () => void) {
+  window.addEventListener("gre-nav", onChange);
+  return () => window.removeEventListener("gre-nav", onChange);
+}
+
 export function Sidebar({
   email,
   dayLabel,
@@ -33,16 +42,12 @@ export function Sidebar({
   modules: SidebarModule[];
 }) {
   const pathname = usePathname();
-  const [expanded, setExpanded] = useState(true);
+  const expanded = useSyncExternalStore(subscribeNav, readNavExpanded, () => true);
   const [openModules, setOpenModules] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    setExpanded(window.localStorage.getItem("gre-nav") !== "hidden");
-  }, []);
-
   function setBar(next: boolean) {
-    setExpanded(next);
     window.localStorage.setItem("gre-nav", next ? "shown" : "hidden");
+    window.dispatchEvent(new Event("gre-nav"));
   }
 
   function toggleModule(id: string) {
