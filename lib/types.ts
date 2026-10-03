@@ -15,7 +15,9 @@ export type QuestionTable = {
 
 export type ErrorTag = "concept" | "careless" | "vocabulary" | "logic" | "time";
 
-export type Tier = "free" | "pass_30" | "pass_90";
+export type Tier = "free" | "pass_30" | "pass_90" | "admin";
+
+export type Role = "admin" | "user";
 
 export type Question = {
   id: string;
@@ -39,6 +41,7 @@ export type PublicQuestion = Omit<Question, "answer">;
 export type User = {
   id: string;
   email: string;
+  role: Role;
 };
 
 export type Profile = {

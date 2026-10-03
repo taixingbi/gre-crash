@@ -58,10 +58,11 @@ export default async function PracticePage({
             key={question.id}
             question={toPublic(question)}
             bookmarked={bookmarks.includes(id)}
+            alreadyDone={attempts.some((attempt) => attempt.questionId === id)}
             nextHref={nextHref}
             nextLabel={nextLabel}
             position={place >= 0 ? { current: place + 1, total: queue.length } : null}
-            aiEnabled={tier !== "free"}
+            aiEnabled
           />
         )}
       </main>

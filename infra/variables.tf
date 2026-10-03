@@ -13,16 +13,6 @@ variable "image_tag" {
   default = "latest"
 }
 
-variable "supabase_url" {
-  type    = string
-  default = "https://wgwcbcynjtmwgihohasw.supabase.co"
-}
-
-variable "supabase_publishable_key" {
-  type    = string
-  default = ""
-}
-
 variable "function_url" {
   type    = string
   default = "https://gwjg7secnplcnrbdxrb52ijbge0dwwnu.lambda-url.us-east-1.on.aws/"
@@ -31,13 +21,18 @@ variable "function_url" {
 variable "inference_api_key" {
   type      = string
   sensitive = true
-  default   = "replace-me"
+  default   = ""
 }
 
-variable "supabase_secret_key" {
+variable "admin_name" {
+  type    = string
+  default = "taixingbi"
+}
+
+variable "admin_password" {
   type      = string
   sensitive = true
-  default   = "replace-me"
+  default   = "123456"
 }
 
 variable "stripe_publishable_key" {
@@ -48,11 +43,11 @@ variable "stripe_publishable_key" {
 variable "stripe_secret_key" {
   type      = string
   sensitive = true
-  default   = "replace-me"
+  default   = ""
 }
 
 variable "stripe_webhook_secret" {
   type      = string
   sensitive = true
-  default   = "replace-me"
+  default   = ""
 }

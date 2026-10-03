@@ -1,16 +1,18 @@
 @import "tailwindcss";
 
 @theme inline {
+  --breakpoint-wide: 90rem;
   --font-sans: var(--font-source);
   --font-serif: var(--font-fraunces);
-  --color-paper: #f3efe4;
-  --color-ink: #1b1914;
-  --color-muted: #5f584c;
-  --color-line: #ddd4c4;
-  --color-card: #faf7f1;
-  --color-pine: #1e4d3a;
-  --color-pine-dark: #143528;
+  --color-paper: #f4f3f0;
+  --color-ink: #1c1b22;
+  --color-muted: #6d6a76;
+  --color-line: #e7e4de;
+  --color-card: #ffffff;
+  --color-pine: #1b4336;
+  --color-pine-dark: #143028;
   --color-clay: #8d3d32;
+  --color-violet: #5b4dff;
 }
 
 body {
@@ -20,5 +22,5 @@ body {
 }
 
 ::selection {
-  background: #d7e4da;
+  background: #ddd9ff;
 }

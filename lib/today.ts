@@ -1,5 +1,4 @@
-import { tierFromSubscription } from "./access";
-import { getPlan, getProfile, getSubscription, listAttempts, listGenerated, listWrongs, savePlan } from "./data";
+import { accountTier, getPlan, getProfile, listAttempts, listGenerated, listWrongs, savePlan } from "./data";
 import { dateKey, daysBetween, todayKey } from "./dates";
 import { buildStudyPlan } from "./plan";
 import { loadQuestions, loadWriting } from "./questions";
@@ -11,7 +10,7 @@ export async function ensureTodayPlan(userId: string): Promise<StudyPlan | null>
   const planDate = todayKey();
   const existing = await getPlan(userId, planDate);
   if (existing) return existing;
-  const tier = tierFromSubscription(await getSubscription(userId));
+  const tier = await accountTier(userId);
   const writing = loadWriting();
   const dayIndex = Math.max(1, daysBetween(dateKey(profile.createdAt), planDate) + 1);
   const writingDay = ((dayIndex - 1) % 10) + 1;

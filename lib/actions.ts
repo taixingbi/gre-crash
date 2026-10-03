@@ -4,15 +4,15 @@ import { randomUUID } from "crypto";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Stripe from "stripe";
-import { tierFromSubscription, FREE_DAILY_LIMIT } from "./access";
+import { hasFullAccess, FREE_DAILY_LIMIT } from "./access";
 import { aiConfigured, explainQuestion, gradeEssay, similarQuestion, tutorReply } from "./ai";
 import {
   addAttempt,
   addGenerated,
+  accountTier,
   addWriting,
   currentUser,
   getProfile,
-  getSubscription,
   listAttempts,
   listGenerated,
   saveProfile,
@@ -98,6 +98,25 @@ export async function saveProfileAction(_state: ActionState, formData: FormData)
   redirect("/onboarding?saved=1");
 }
 
+export async function skipProfileAction() {
+  const user = await requireUser();
+  const existing = await getProfile(user.id);
+  if (!existing) {
+    await saveProfile({
+      userId: user.id,
+      testDate: null,
+      currentQuant: null,
+      currentVerbal: null,
+      targetScore: null,
+      hoursPerDay: 2,
+      weakAreas: [],
+      diagnosticDone: false,
+      createdAt: new Date().toISOString(),
+    });
+  }
+  redirect("/today");
+}
+
 function normalizeSelection(selected: string) {
   const letters = selected.toUpperCase().match(/[A-I]/g);
   if (letters && letters.length === selected.replace(/[^a-z0-9-]/gi, "").length) {
@@ -111,7 +130,7 @@ export async function submitAnswerAction(input: { questionId: string; selected: 
   const generated = await listGenerated(user.id);
   const question = findQuestion(input.questionId, generated);
   if (!question) return { error: "That question is not in the bank." };
-  const tier = tierFromSubscription(await getSubscription(user.id));
+  const tier = await accountTier(user.id);
   if (tier === "free" && !isDiagnosticId(question.id)) {
     const today = todayKey();
     const used = (await listAttempts(user.id)).filter(
@@ -166,8 +185,6 @@ export async function askAiAction(input: {
   selected: string;
 }) {
   const user = await requireUser();
-  const tier = tierFromSubscription(await getSubscription(user.id));
-  if (tier === "free") return { error: "AI explanations are part of the 30-day pass." };
   if (!aiConfigured()) return { error: "Nova Pro is not configured on this server." };
   const question = findQuestion(input.questionId, await listGenerated(user.id));
   if (!question) return { error: "That question is not in the bank." };
@@ -187,8 +204,6 @@ export async function askTutorAction(input: {
   message: string;
 }) {
   const user = await requireUser();
-  const tier = tierFromSubscription(await getSubscription(user.id));
-  if (tier === "free") return { error: "AI explanations are part of the 30-day pass." };
   if (!aiConfigured()) return { error: "Nova Pro is not configured on this server." };
   const message = input.message.trim();
   if (!message) return { error: "Type a question first." };
@@ -288,8 +303,8 @@ export async function finishDiagnosticAction() {
 
 export async function submitEssayAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireUser();
-  const tier = tierFromSubscription(await getSubscription(user.id));
-  if (tier !== "pass_90") return { error: "Writing AI is part of the 90-day pass." };
+  const tier = await accountTier(user.id);
+  if (!hasFullAccess(tier)) return { error: "Writing AI is part of the 90-day pass." };
   if (!aiConfigured()) return { error: "Nova Pro is not configured on this server." };
   const essay = String(formData.get("essay") ?? "").trim();
   const prompt = String(formData.get("prompt") ?? "").trim();

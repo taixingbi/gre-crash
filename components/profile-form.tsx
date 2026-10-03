@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { saveProfileAction, type ActionState } from "@/lib/actions";
+import { saveProfileAction, skipProfileAction, type ActionState } from "@/lib/actions";
 import type { Profile } from "@/lib/types";
 
 const initial: ActionState = {};
@@ -35,9 +35,14 @@ export function ProfileForm({ profile }: { profile: Profile | null }) {
         <input name="weak" placeholder="Probability, Multi-blank TC" defaultValue={profile?.weakAreas.join(", ") ?? ""} className="mt-1 w-full rounded-md border border-line bg-card px-3 py-2" />
       </label>
       {state.error ? <p className="text-sm text-clay sm:col-span-2">{state.error}</p> : null}
-      <button type="submit" disabled={pending} className="rounded-md bg-pine px-4 py-2.5 text-sm font-semibold text-paper sm:col-span-2">
-        {pending ? "Saving…" : "Save and continue"}
-      </button>
+      <div className="flex flex-col gap-2 sm:col-span-2">
+        <button type="submit" disabled={pending} className="rounded-md bg-pine px-4 py-2.5 text-sm font-semibold text-paper">
+          {pending ? "Saving…" : "Save and continue"}
+        </button>
+        <button type="submit" formAction={skipProfileAction} formNoValidate disabled={pending} className="rounded-md px-4 py-2.5 text-sm font-semibold text-pine">
+          Skip
+        </button>
+      </div>
     </form>
   );
 }

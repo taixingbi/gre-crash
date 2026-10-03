@@ -1,5 +1,5 @@
-output "alb_dns_name" {
-  value = aws_lb.app.dns_name
+output "function_url" {
+  value = aws_lambda_function_url.web.function_url
 }
 
 output "ecr_repository_url" {

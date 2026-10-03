@@ -1,9 +1,11 @@
-import { Sidebar } from "@/components/sidebar";
+import { Sidebar, type SidebarModule } from "@/components/sidebar";
 import { tierLabel } from "@/lib/access";
-import { usingSupabase } from "@/lib/data";
+import { currentUser, listAttempts, listBookmarks, usingDynamo } from "@/lib/data";
+import { dateKey } from "@/lib/dates";
+import { ensureTodayPlan } from "@/lib/today";
 import type { Tier } from "@/lib/types";
 
-export function AppShell({
+export async function AppShell({
   email,
   tier,
   dayLabel,
@@ -14,11 +16,71 @@ export function AppShell({
   dayLabel: string;
   children: React.ReactNode;
 }) {
-  const note = `${tierLabel(tier)}${process.env.DEV_UNLOCK ? " · dev unlock" : ""} · ${usingSupabase() ? "Supabase" : "Local dev data"}`;
+  const viewer = await currentUser();
+  const note = `${viewer?.role === "admin" ? "Admin" : tierLabel(tier)}${process.env.DEV_UNLOCK ? " · dev unlock" : ""} · ${usingDynamo() ? "DynamoDB" : "Local"}`;
+  const modules = await todayModules();
   return (
-    <div className="lg:flex lg:min-h-screen">
-      <Sidebar email={email} dayLabel={dayLabel} note={note} />
+    <div className="flex min-h-screen flex-col bg-paper lg:flex-row lg:items-stretch">
+      <Sidebar email={email} dayLabel={dayLabel} note={note} modules={modules} />
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
+}
+
+async function todayModules(): Promise<SidebarModule[]> {
+  const user = await currentUser();
+  if (!user) return [];
+  const plan = await ensureTodayPlan(user.id);
+  if (!plan) return [];
+  const attempts = await listAttempts(user.id);
+  const bookmarks = new Set(await listBookmarks(user.id));
+  const done = new Set(attempts.filter((attempt) => dateKey(attempt.createdAt) === plan.planDate).map((attempt) => attempt.questionId));
+  const questions = plan.items.filter((item) => item.kind === "question");
+  const modules: SidebarModule[] = [];
+  for (const section of ["quant", "verbal"] as const) {
+    const rows = questions.filter((item) => item.section === section);
+    if (!rows.length) continue;
+    const counts = new Map<string, number>();
+    for (const row of rows) counts.set(row.category, (counts.get(row.category) ?? 0) + 1);
+    const seen = new Map<string, number>();
+    modules.push({
+      id: section,
+      kicker: section === "quant" ? "Quant" : "Verbal",
+      title: section === "quant" ? "Problem solving" : "Reading and vocabulary",
+      lessons: rows.map((row) => {
+        const index = (seen.get(row.category) ?? 0) + 1;
+        seen.set(row.category, index);
+        const repeated = (counts.get(row.category) ?? 0) > 1;
+        const finished = done.has(row.questionId);
+        const bookmarked = bookmarks.has(row.questionId);
+        const marks = [finished ? "Done" : "", bookmarked ? "Bookmarked" : ""].filter(Boolean);
+        return {
+          id: row.questionId,
+          href: `/practice/${row.questionId}`,
+          title: repeated ? `${row.category} ${index}` : row.category,
+          meta: marks.length ? marks.join(" · ") : "Question",
+          done: finished,
+          bookmarked,
+        };
+      }),
+    });
+  }
+  const writing = plan.items.find((item) => item.kind === "writing");
+  if (writing && writing.kind === "writing") {
+    modules.push({
+      id: "writing",
+      kicker: "Writing",
+      title: "Issue essay",
+      lessons: [
+        {
+          id: `writing-${writing.day}`,
+          href: "/today#writing",
+          title: writing.title,
+          meta: "Outline",
+          done: false,
+        },
+      ],
+    });
+  }
+  return modules;
 }

@@ -15,8 +15,8 @@ REPO="$(terraform -chdir=infra output -raw ecr_repository_url)"
 ACCOUNT="${REPO%%.*}"
 
 aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "${ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-docker build -t "${REPO}:${TAG}" .
+docker build --platform linux/arm64 --provenance=false --sbom=false -t "${REPO}:${TAG}" .
 docker push "${REPO}:${TAG}"
 
-echo "Image pushed. Apply the new tag with:"
+echo "Image pushed. Point Lambda at the new digest with:"
 echo "terraform -chdir=infra apply -var=image_tag=${TAG}"

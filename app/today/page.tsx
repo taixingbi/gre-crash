@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { WritingPanel } from "@/components/writing-panel";
-import { getProfile, listAttempts } from "@/lib/data";
+import { getProfile, listAttempts, listBookmarks } from "@/lib/data";
 import { dateKey, studyDayLabel } from "@/lib/dates";
 import { loadWriting } from "@/lib/questions";
 import { ensureTodayPlan } from "@/lib/today";
@@ -22,6 +22,7 @@ export default async function TodayPage() {
   const plan = await ensureTodayPlan(user.id);
   if (!plan) redirect("/onboarding");
   const attempts = await listAttempts(user.id);
+  const bookmarks = new Set(await listBookmarks(user.id));
   const done = new Set(attempts.filter((attempt) => dateKey(attempt.createdAt) === plan.planDate).map((attempt) => attempt.questionId));
   const questions = plan.items.filter((item) => item.kind === "question");
   const writingItem = plan.items.find((item) => item.kind === "writing");
@@ -34,31 +35,36 @@ export default async function TodayPage() {
 
   return (
     <AppShell email={user.email} tier={tier} dayLabel={dayLabel}>
-      <main className="mx-auto max-w-3xl space-y-8 px-6 py-12">
+      <main className="mx-auto max-w-3xl space-y-8 px-6 py-10 lg:px-10 lg:py-12">
         <div>
-          <p className="text-sm font-semibold text-pine">{plan.mode === "adaptive" ? "Adjusted from yesterday" : "10-day rotation"}</p>
-          <h1 className="mt-2 font-serif text-5xl">{dayLabel}</h1>
-          <p className="mt-3 text-muted">About {formatMinutes(plan.minutes)}</p>
+          <p className="text-xs font-semibold tracking-[0.16em] text-muted uppercase">{plan.mode === "adaptive" ? "Adjusted from yesterday" : "10-day rotation"}</p>
+          <h1 className="mt-3 font-serif text-5xl tracking-tight">{dayLabel}</h1>
+          <p className="mt-2 text-muted">About {formatMinutes(plan.minutes)}</p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-3">
           <Stat label="Quant" value={String(quant.length)} />
           <Stat label="Verbal" value={String(verbal.length)} />
           <Stat label="Writing" value={writingItem ? "1 outline" : "—"} />
         </div>
-        <ol className="divide-y divide-line rounded-lg border border-line bg-card">
+        <ol className="overflow-hidden rounded-3xl border border-line bg-white shadow-sm">
           {questions.map((item, index) => {
             const next = questions[index + 1];
             const href = `/practice/${item.questionId}${next ? `?next=${next.questionId}` : ""}`;
             const resume = item.questionId === resumeId;
+            const finished = done.has(item.questionId);
+            const bookmarked = bookmarks.has(item.questionId);
             return (
-              <li key={item.questionId}>
-                <Link href={href} className={`flex items-center justify-between px-4 py-3 ${resume ? "bg-pine text-paper" : "hover:bg-paper"}`}>
+              <li key={item.questionId} className={index > 0 && !resume ? "border-t border-line" : ""}>
+                <Link href={href} className={`flex items-center justify-between gap-4 px-5 py-4 ${resume ? "bg-pine text-white" : finished ? "bg-[#f3f2ef] text-muted" : "hover:bg-paper"}`}>
                   <span>
-                    <span className={`text-sm ${resume ? "text-paper/80" : "text-muted"}`}>{item.section === "quant" ? "Quant" : "Verbal"}</span>
-                    <span className="mt-0.5 block">{item.category}</span>
+                    <span className={`flex items-center gap-2 text-[11px] font-semibold tracking-[0.14em] uppercase ${resume ? "text-white/70" : "text-muted"}`}>
+                      {item.section === "quant" ? "Quant" : "Verbal"}
+                      {bookmarked ? <BookmarkMark light={resume} /> : null}
+                    </span>
+                    <span className={`mt-0.5 block font-medium ${finished && !resume ? "text-muted" : ""}`}>{item.category}</span>
                   </span>
-                  <span className={`text-sm font-semibold ${resume ? "text-paper" : "text-muted"}`}>
-                    {done.has(item.questionId) ? "Done" : resume ? "Continue" : "Start"}
+                  <span className={`shrink-0 text-sm font-semibold ${resume ? "rounded-full bg-white px-4 py-1.5 text-ink" : finished ? "text-[#8d8a96]" : "text-muted"}`}>
+                    {finished ? "Done" : resume ? "Continue" : "Start"}
                   </span>
                 </Link>
               </li>
@@ -66,25 +72,35 @@ export default async function TodayPage() {
           })}
         </ol>
         {prompt && writingItem ? (
+          <div id="writing">
           <WritingPanel
             day={prompt.day}
             theme={prompt.theme}
             prompt={prompt.prompt}
             task={prompt.task}
             template={writing.template}
-            canGrade={tier === "pass_90"}
+            canGrade={tier === "pass_90" || tier === "admin"}
           />
+          </div>
         ) : null}
       </main>
     </AppShell>
   );
 }
 
+function BookmarkMark({ light }: { light: boolean }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-label="Bookmarked" className={`h-3.5 w-3.5 ${light ? "text-white" : "text-[#8d8a96]"}`}>
+      <path d="M4 2.5h8v11l-4-2.4-4 2.4v-11z" fill="currentColor" />
+    </svg>
+  );
+}
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-line bg-card px-4 py-3">
-      <p className="text-sm text-muted">{label}</p>
-      <p className="font-serif text-3xl">{value}</p>
+    <div className="rounded-2xl border border-line bg-white px-5 py-4 shadow-sm">
+      <p className="text-[11px] font-semibold tracking-[0.14em] text-muted uppercase">{label}</p>
+      <p className="mt-2 font-serif text-4xl tracking-tight">{value}</p>
     </div>
   );
 }

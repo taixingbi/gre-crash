@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Header } from "@/components/header";
-import { tierFromSubscription } from "@/lib/access";
-import { currentUser, getProfile, getSubscription } from "@/lib/data";
+import { accountTier, currentUser, getProfile } from "@/lib/data";
 import { studyDayLabel } from "@/lib/dates";
 
 const points = [
@@ -20,7 +19,7 @@ const prices = [
 
 export default async function HomePage() {
   const user = await currentUser();
-  const tier = user ? tierFromSubscription(await getSubscription(user.id)) : undefined;
+  const tier = user ? await accountTier(user.id) : undefined;
   const profile = user ? await getProfile(user.id) : null;
   const dayLabel = profile ? studyDayLabel(profile.createdAt) : "Today";
   return (

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { tierLabel } from "@/lib/access";
 import { signOutAction } from "@/lib/actions";
-import { usingSupabase } from "@/lib/data";
+import { usingDynamo } from "@/lib/data";
 import type { Tier } from "@/lib/types";
 
 export function Header({ email, tier, dayLabel = "Today" }: { email?: string; tier?: Tier; dayLabel?: string }) {
@@ -9,7 +9,7 @@ export function Header({ email, tier, dayLabel = "Today" }: { email?: string; ti
     <header className="border-b border-line">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-6 px-6 py-4">
         <Link href={email ? "/today" : "/"} className="font-serif text-xl tracking-tight">
-          GRE Crash
+          GREMastery
         </Link>
         <nav className="flex items-center gap-5 text-sm">
           {email ? (
@@ -41,7 +41,7 @@ export function Header({ email, tier, dayLabel = "Today" }: { email?: string; ti
             {email} · {tierLabel(tier)}
             {process.env.DEV_UNLOCK ? " · dev unlock" : ""}
           </span>
-          <span>{usingSupabase() ? "Supabase" : "Local dev data"}</span>
+          <span>{usingDynamo() ? "DynamoDB" : "Local"}</span>
         </div>
       ) : null}
     </header>

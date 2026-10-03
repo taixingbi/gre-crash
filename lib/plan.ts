@@ -101,7 +101,7 @@ export function buildStudyPlan(input: {
   wrongs: WrongQuestion[];
   writingTitle: string;
 }): StudyPlan {
-  const mode = input.tier === "pass_90" ? "adaptive" : "static";
+  const mode = input.tier === "pass_90" || input.tier === "admin" ? "adaptive" : "static";
   const dayIndex = Math.max(1, daysBetween(dateKey(input.profile.createdAt), input.planDate) + 1);
   const daysLeft = input.profile.testDate ? daysBetween(input.planDate, input.profile.testDate) : null;
   const writingDay = ((dayIndex - 1) % 10) + 1;

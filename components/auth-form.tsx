@@ -10,17 +10,18 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const [state, formAction, pending] = useActionState(action, initial);
   return (
     <form action={formAction} className="space-y-4">
-      <label className="block text-sm">
-        Email
+      <label className="block text-sm font-medium">
+        {mode === "login" ? "Username" : "Email"}
         <input
           name="email"
-          type="email"
+          type={mode === "login" ? "text" : "email"}
           required
-          autoComplete="email"
-          className="mt-1 w-full rounded-md border border-line bg-card px-3 py-2"
+          placeholder={mode === "login" ? "e.g. priya_patel" : "you@example.com"}
+          autoComplete={mode === "login" ? "username" : "email"}
+          className="mt-1.5 w-full rounded-xl border border-[#e4e1ea] bg-white px-3 py-2.5"
         />
       </label>
-      <label className="block text-sm">
+      <label className="block text-sm font-medium">
         Password
         <input
           name="password"
@@ -28,14 +29,14 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           required
           minLength={6}
           autoComplete={mode === "login" ? "current-password" : "new-password"}
-          className="mt-1 w-full rounded-md border border-line bg-card px-3 py-2"
+          className="mt-1.5 w-full rounded-xl border border-[#e4e1ea] bg-white px-3 py-2.5"
         />
       </label>
       {state.error ? <p className="text-sm text-clay">{state.error}</p> : null}
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-md bg-pine px-4 py-2.5 text-sm font-semibold text-paper disabled:opacity-60"
+        className="w-full rounded-xl bg-violet px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
       >
         {pending ? "Working…" : mode === "login" ? "Log in" : "Create account"}
       </button>

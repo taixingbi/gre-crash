@@ -8,6 +8,7 @@ import type {
   EssayRubric,
   Profile,
   Question,
+  Role,
   StudyPlan,
   Subscription,
   User,
@@ -16,6 +17,13 @@ import type {
 } from "./types";
 
 type LocalUser = User & { passwordHash: string };
+
+export function adminAccount() {
+  return {
+    name: (process.env.ADMIN_NAME || "taixingbi").trim().toLowerCase(),
+    password: process.env.ADMIN_PASSWORD || "123456",
+  };
+}
 
 type Database = {
   users: LocalUser[];
@@ -50,11 +58,41 @@ function empty(): Database {
 }
 
 function load(): Database {
+  let db: Database;
   try {
-    return { ...empty(), ...JSON.parse(fs.readFileSync(file, "utf8")) };
+    db = { ...empty(), ...JSON.parse(fs.readFileSync(file, "utf8")) };
   } catch {
-    return empty();
+    db = empty();
   }
+  const admin = adminAccount();
+  if (!db.users.some((user) => user.email === admin.name)) {
+    const user: LocalUser = {
+      id: "admin",
+      email: admin.name,
+      role: "admin",
+      passwordHash: hashPassword(admin.password),
+    };
+    db.users.push(user);
+    if (!db.profiles.some((profile) => profile.userId === user.id)) {
+      db.profiles.push({
+        userId: user.id,
+        testDate: null,
+        currentQuant: null,
+        currentVerbal: null,
+        targetScore: null,
+        hoursPerDay: 2,
+        weakAreas: [],
+        diagnosticDone: false,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    save(db);
+  }
+  return db;
+}
+
+function publicUser(user: LocalUser): User {
+  return { id: user.id, email: user.email, role: user.role === "admin" ? "admin" : "user" };
 }
 
 function save(db: Database) {
@@ -68,7 +106,11 @@ export const localDb = {
     const db = load();
     const session = db.sessions.find((item) => item.token === token);
     const user = db.users.find((item) => item.id === session?.userId);
-    return user ? { id: user.id, email: user.email } : null;
+    return user ? publicUser(user) : null;
+  },
+  userById(userId: string): User | null {
+    const user = load().users.find((item) => item.id === userId);
+    return user ? publicUser(user) : null;
   },
   signUp(email: string, password: string) {
     const db = load();
@@ -76,23 +118,23 @@ export const localDb = {
     if (db.users.some((user) => user.email === normalized)) {
       return { error: "An account with that email already exists." };
     }
-    const user: LocalUser = { id: randomUUID(), email: normalized, passwordHash: hashPassword(password) };
+    const user: LocalUser = { id: randomUUID(), email: normalized, role: "user" satisfies Role, passwordHash: hashPassword(password) };
     const token = randomUUID();
     db.users.push(user);
     db.sessions.push({ token, userId: user.id });
     save(db);
-    return { token, user: { id: user.id, email: user.email } };
+    return { token, user: publicUser(user) };
   },
   signIn(email: string, password: string) {
     const db = load();
     const user = db.users.find((item) => item.email === email.trim().toLowerCase());
     if (!user || !verifyPassword(password, user.passwordHash)) {
-      return { error: "Email or password is wrong." };
+      return { error: "Username or password is wrong." };
     }
     const token = randomUUID();
     db.sessions.push({ token, userId: user.id });
     save(db);
-    return { token, user: { id: user.id, email: user.email } };
+    return { token, user: publicUser(user) };
   },
   signOut(token: string | undefined) {
     if (!token) return;

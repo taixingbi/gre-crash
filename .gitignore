@@ -40,6 +40,9 @@ yarn-error.log*
 /.data
 /.venv
 /infra/terraform.tfvars
+/infra/.terraform/
+/infra/terraform.tfstate
+/infra/terraform.tfstate.*
 
 # vercel
 .vercel
