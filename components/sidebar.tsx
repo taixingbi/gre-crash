@@ -80,17 +80,14 @@ export function Sidebar({
   const router = useRouter();
   const navRef = useRef<HTMLElement>(null);
   const [pending, startTransition] = useTransition();
-  const [currentDay, setCurrentDay] = useState(planDate);
+  const [pickedDay, setPickedDay] = useState<{ from: string; to: string } | null>(null);
+  const currentDay = pickedDay?.from === planDate ? pickedDay.to : planDate;
   loadNavScroll();
   const expanded = useSyncExternalStore(subscribeNav, readNavExpanded, () => true);
   const [openModules, setOpenModules] = useState<Record<string, boolean>>(openModuleMemory);
 
-  useLayoutEffect(() => {
-    setCurrentDay(planDate);
-  }, [planDate]);
-
   function changeDay(next: string) {
-    setCurrentDay(next);
+    setPickedDay({ from: planDate, to: next });
     startTransition(async () => {
       await selectStudyDayAction(next);
       router.refresh();

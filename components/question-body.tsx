@@ -375,6 +375,8 @@ export function QuestionBody({
     <div className="space-y-5">
       <div className={plain ? "text-ink" : "rounded-lg border border-line bg-card p-5 text-ink"}>
         {question.figure ? (
+          // Diagrams are private, uncached, and sized by the source image.
+          // eslint-disable-next-line @next/next/no-img-element
           <img src={`/api/questions/${question.id}/figure?v=16`} alt="" className="mx-auto mb-5 max-h-[40rem] max-w-full" />
         ) : null}
         {table && table.rows.length > 0 ? (

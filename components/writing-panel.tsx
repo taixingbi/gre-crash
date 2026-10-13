@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { WritingTutor } from "@/components/writing-tutor";
 import { essayPhrases } from "@/lib/essay-phrases";
 import { essayWords } from "@/lib/essay-words";
@@ -18,6 +18,46 @@ function wordCount(text: string) {
 
 function rubricText(rubric: EssayRubric) {
   return `Thesis: ${rubric.thesis}\nOrganization: ${rubric.organization}\nEvidence: ${rubric.evidence}\nCounterargument: ${rubric.counterargument}\n\n${rubric.advice}`;
+}
+
+type Draft = {
+  essay: string;
+  notes: Record<string, string>;
+  rubric?: EssayRubric;
+};
+
+function draftFromEssays(day: number, essays: WritingSubmission[]): Draft {
+  const prior = essays.find((item) => item.day === day);
+  return prior ? { essay: prior.essay, notes: {}, rubric: prior.rubric } : { essay: "", notes: {} };
+}
+
+function draftFromStorage(storageKey: string, day: number, essays: WritingSubmission[]): Draft {
+  try {
+    const raw = window.localStorage.getItem(storageKey) ?? window.localStorage.getItem(`gre-essay-draft:${day}`);
+    if (raw) {
+      const saved = JSON.parse(raw) as { essay?: string; notes?: Record<string, string>; rubric?: EssayRubric };
+      const essay = typeof saved.essay === "string" ? saved.essay : "";
+      const notes = saved.notes && typeof saved.notes === "object" ? saved.notes : {};
+      if (essay.trim() || Object.values(notes).some((value) => value?.trim())) {
+        return { essay, notes, rubric: saved.rubric };
+      }
+    }
+  } catch {
+    // A damaged draft should not block a new essay.
+  }
+  return draftFromEssays(day, essays);
+}
+
+function subscribeMounted() {
+  return () => {};
+}
+
+function composeDraft(notes: Record<string, string>, essay: string) {
+  const plan = boxes
+    .map((label) => (notes[label]?.trim() ? `${label}: ${notes[label].trim()}` : ""))
+    .filter(Boolean)
+    .join("\n");
+  return [plan, essay.trim()].filter(Boolean).join("\n\n");
 }
 
 export function WritingDesk({
@@ -70,71 +110,43 @@ function WritingPanel({
   onDraftChange: (draft: string) => void;
 }) {
   const storageKey = `gre-essay-draft:${planDate}`;
-  const [scoreState, scoreAction, scorePending] = useActionState(scoreEssayAction, initial);
+  const mounted = useSyncExternalStore(subscribeMounted, () => true, () => false);
+  const loaded = useMemo(
+    () => (mounted ? draftFromStorage(storageKey, day, essays) : draftFromEssays(day, essays)),
+    [mounted, storageKey, day, essays],
+  );
+  const [notes, setNotes] = useState<Record<string, string> | null>(null);
+  const [essay, setEssay] = useState<string | null>(null);
+  const [rubric, setRubric] = useState<EssayRubric | undefined | null>(null);
+  const [scoredText, setScoredText] = useState<string | null>(null);
+  const [scoreState, scoreAction, scorePending] = useActionState(async (prev: ActionState, formData: FormData) => {
+    const result = await scoreEssayAction(prev, formData);
+    if (result.rubric) {
+      setRubric(result.rubric);
+      setScoredText(String(formData.get("essay") ?? "").trim());
+    }
+    return result;
+  }, initial);
   const [saveState, saveAction, savePending] = useActionState(saveEssayAction, initial);
-  const [notes, setNotes] = useState<Record<string, string>>({});
-  const [essay, setEssay] = useState("");
-  const [rubric, setRubric] = useState<EssayRubric | undefined>();
-  const [scoredText, setScoredText] = useState("");
-  const [hydratedKey, setHydratedKey] = useState<string | null>(null);
-  const essayRef = useRef(essay);
-  essayRef.current = essay;
-
-  function publish(nextNotes: Record<string, string>, nextEssay: string) {
-    const plan = boxes
-      .map((label) => (nextNotes[label]?.trim() ? `${label}: ${nextNotes[label].trim()}` : ""))
-      .filter(Boolean)
-      .join("\n");
-    onDraftChange([plan, nextEssay.trim()].filter(Boolean).join("\n\n"));
-  }
+  const notesValue = notes ?? loaded.notes;
+  const essayValue = essay ?? loaded.essay;
+  const activeRubric = rubric === null ? loaded.rubric : rubric;
+  const rubricFor = scoredText ?? (loaded.rubric ? loaded.essay.trim() : "");
+  const displayRubric = activeRubric && essayValue.trim() === rubricFor ? activeRubric : undefined;
 
   useEffect(() => {
-    let nextEssay = "";
-    let nextNotes: Record<string, string> = {};
-    let nextRubric: EssayRubric | undefined;
-    try {
-      const raw = window.localStorage.getItem(storageKey) ?? window.localStorage.getItem(`gre-essay-draft:${day}`);
-      if (raw) {
-        const saved = JSON.parse(raw) as { essay?: string; notes?: Record<string, string>; rubric?: EssayRubric };
-        nextEssay = typeof saved.essay === "string" ? saved.essay : "";
-        nextNotes = saved.notes && typeof saved.notes === "object" ? saved.notes : {};
-        nextRubric = saved.rubric;
-      }
-    } catch {
-      // A damaged draft should not block a new essay.
-    }
-    if (!nextEssay.trim()) {
-      const prior = essays.find((item) => item.day === day);
-      if (prior) {
-        nextEssay = prior.essay;
-        nextRubric = prior.rubric;
-      }
-    }
-    setEssay(nextEssay);
-    setNotes(nextNotes);
-    setRubric(nextRubric);
-    setScoredText(nextRubric ? nextEssay.trim() : "");
-    publish(nextNotes, nextEssay);
-    setHydratedKey(storageKey);
-    // Restore this day's draft when the day changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey]);
+    onDraftChange(composeDraft(notesValue, essayValue));
+  }, [notesValue, essayValue, onDraftChange]);
 
   useEffect(() => {
-    if (hydratedKey !== storageKey) return;
-    window.localStorage.setItem(storageKey, JSON.stringify({ essay, notes, rubric }));
-  }, [hydratedKey, storageKey, essay, notes, rubric]);
-
-  useEffect(() => {
-    if (!scoreState.rubric) return;
-    setRubric(scoreState.rubric);
-    setScoredText(essayRef.current.trim());
-  }, [scoreState.rubric]);
+    if (!mounted) return;
+    window.localStorage.setItem(storageKey, JSON.stringify({ essay: essayValue, notes: notesValue, rubric: displayRubric }));
+  }, [mounted, storageKey, essayValue, notesValue, displayRubric]);
 
   function writeEssay(next: string) {
     setEssay(next);
-    if (next.trim() !== scoredText) setRubric(undefined);
-    publish(notes, next);
+    if (next.trim() !== rubricFor) setRubric(undefined);
+    onDraftChange(composeDraft(notesValue, next));
   }
 
   return (
@@ -148,11 +160,11 @@ function WritingPanel({
           <label key={label} className="text-sm">
             {label}
             <input
-              value={notes[label] ?? ""}
+              value={notesValue[label] ?? ""}
               onChange={(event) => {
-                const next = { ...notes, [label]: event.target.value };
+                const next = { ...notesValue, [label]: event.target.value };
                 setNotes(next);
-                publish(next, essay);
+                onDraftChange(composeDraft(next, essayValue));
               }}
               className="mt-1 w-full rounded-md border border-line bg-paper px-3 py-2"
             />
@@ -207,29 +219,29 @@ function WritingPanel({
       <form action={saveAction} className="space-y-3">
         <input type="hidden" name="day" value={day} />
         <input type="hidden" name="prompt" value={prompt} />
-        <input type="hidden" name="rubric" value={rubric ? JSON.stringify(rubric) : ""} />
+        <input type="hidden" name="rubric" value={displayRubric ? JSON.stringify(displayRubric) : ""} />
         <textarea
           name="essay"
           rows={12}
-          value={essay}
+          value={essayValue}
           onChange={(event) => writeEssay(event.target.value)}
           placeholder="Write the essay here. Aim for 25 minutes."
           className="w-full rounded-md border border-line bg-paper px-3 py-2 leading-6"
         />
-        <p className="text-right text-sm text-muted">{wordCount(essay)} words</p>
+        <p className="text-right text-sm text-muted">{wordCount(essayValue)} words</p>
         {scoreState.error ? <p className="text-sm text-clay">{scoreState.error}</p> : null}
         {saveState.error ? <p className="text-sm text-clay">{saveState.error}</p> : null}
-        {rubric ? <p className="whitespace-pre-wrap text-sm leading-6">{rubricText(rubric)}</p> : null}
+        {displayRubric ? <p className="whitespace-pre-wrap text-sm leading-6">{rubricText(displayRubric)}</p> : null}
         {saveState.message ? <p className="text-sm text-muted">{saveState.message}</p> : null}
         <div className="flex gap-2">
           {canGrade ? (
-            <button type="submit" formAction={scoreAction} disabled={scorePending || savePending || wordCount(essay) === 0} className="rounded-md bg-pine px-4 py-2 text-sm font-semibold text-paper disabled:opacity-40">
+            <button type="submit" formAction={scoreAction} disabled={scorePending || savePending || wordCount(essayValue) === 0} className="rounded-md bg-pine px-4 py-2 text-sm font-semibold text-paper disabled:opacity-40">
               {scorePending ? "Scoring…" : "Score"}
             </button>
           ) : (
             <p className="text-sm text-muted">Essay scoring is on the 90-day pass.</p>
           )}
-          <button type="submit" disabled={savePending || scorePending || wordCount(essay) === 0} className="rounded-md border border-line px-4 py-2 text-sm font-semibold disabled:opacity-40">
+          <button type="submit" disabled={savePending || scorePending || wordCount(essayValue) === 0} className="rounded-md border border-line px-4 py-2 text-sm font-semibold disabled:opacity-40">
             {savePending ? "Saving…" : "Save"}
           </button>
         </div>
@@ -258,11 +270,12 @@ export function SavedEssays({ essays, canGrade = false }: { essays: WritingSubmi
 function EssayRow({ essay, canGrade }: { essay: WritingSubmission; canGrade: boolean }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(essay.essay);
-  const [state, action, pending] = useActionState(updateEssayAction, initial);
+  const [state, action, pending] = useActionState(async (prev: ActionState, formData: FormData) => {
+    const result = await updateEssayAction(prev, formData);
+    if (result.message) setEditing(false);
+    return result;
+  }, initial);
   const [scoreState, scoreAction, scorePending] = useActionState(scoreEssayAction, initial);
-  useEffect(() => {
-    if (state.message) setEditing(false);
-  }, [state.message]);
   const shown = scoreState.rubric ?? essay.rubric;
   return (
     <details className="rounded-md border border-line bg-paper px-3 py-2">
