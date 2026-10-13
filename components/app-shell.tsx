@@ -1,7 +1,9 @@
-import { Sidebar, type SidebarModule } from "@/components/sidebar";
+import { MainPane } from "@/components/main-pane";
+import { Sidebar, type SidebarDay, type SidebarModule } from "@/components/sidebar";
 import { tierLabel } from "@/lib/access";
-import { currentUser, listAttempts, listBookmarks, usingDynamo } from "@/lib/data";
-import { dateKey } from "@/lib/dates";
+import { accountTier, currentUser, getProfile, listAttempts, listBookmarks, usingDynamo } from "@/lib/data";
+import { dateKey, studyDayLabel } from "@/lib/dates";
+import { courseDates, studyDates } from "@/lib/study-day";
 import { ensureTodayPlan } from "@/lib/today";
 import type { Tier } from "@/lib/types";
 
@@ -18,13 +20,25 @@ export async function AppShell({
 }) {
   const viewer = await currentUser();
   const note = `${viewer?.role === "admin" ? "Admin" : tierLabel(tier)}${process.env.DEV_UNLOCK ? " · dev unlock" : ""} · ${usingDynamo() ? "DynamoDB" : "Local"}`;
+  const study = await studySidebar(dayLabel);
   const modules = await todayModules();
   return (
-    <div className="flex min-h-screen flex-col bg-paper lg:flex-row lg:items-stretch">
-      <Sidebar email={email} dayLabel={dayLabel} note={note} modules={modules} />
-      <div className="min-w-0 flex-1">{children}</div>
+    <div className="flex min-h-screen flex-col bg-paper lg:h-dvh lg:flex-row lg:overflow-hidden">
+      <Sidebar email={email} dayLabel={study.label} planDate={study.planDate} days={study.days} note={note} modules={modules} />
+      <MainPane>{children}</MainPane>
     </div>
   );
+}
+
+async function studySidebar(fallback: string): Promise<{ label: string; planDate: string; days: SidebarDay[] }> {
+  const user = await currentUser();
+  const profile = user ? await getProfile(user.id) : null;
+  if (!user || !profile) return { label: fallback, planDate: "", days: [] };
+  const tier = await accountTier(user.id);
+  const days = tier === "admin" ? courseDates(profile.createdAt, profile.testDate) : studyDates(profile.createdAt);
+  const plan = await ensureTodayPlan(user.id);
+  const planDate = plan?.planDate ?? days.at(-1)?.planDate ?? "";
+  return { label: studyDayLabel(profile.createdAt, planDate || undefined), planDate, days };
 }
 
 async function todayModules(): Promise<SidebarModule[]> {
@@ -74,7 +88,7 @@ async function todayModules(): Promise<SidebarModule[]> {
       lessons: [
         {
           id: `writing-${writing.day}`,
-          href: "/today#writing",
+          href: "/writing",
           title: writing.title,
           meta: "Outline",
           done: false,

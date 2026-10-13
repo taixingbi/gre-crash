@@ -1,9 +1,7 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
-import { WritingPanel } from "@/components/writing-panel";
 import { getProfile, listAttempts, listBookmarks } from "@/lib/data";
 import { dateKey, studyDayLabel } from "@/lib/dates";
-import { loadWriting } from "@/lib/questions";
 import { ensureTodayPlan } from "@/lib/today";
 import { requireViewer } from "@/lib/viewer";
 import { redirect } from "next/navigation";
@@ -25,12 +23,10 @@ export default async function TodayPage() {
   const bookmarks = new Set(await listBookmarks(user.id));
   const done = new Set(attempts.filter((attempt) => dateKey(attempt.createdAt) === plan.planDate).map((attempt) => attempt.questionId));
   const questions = plan.items.filter((item) => item.kind === "question");
-  const writingItem = plan.items.find((item) => item.kind === "writing");
-  const writing = loadWriting();
-  const prompt = writingItem ? writing.prompts.find((item) => item.day === writingItem.day) : undefined;
+  const writingItem = plan.items.find((item): item is Extract<(typeof plan.items)[number], { kind: "writing" }> => item.kind === "writing");
   const quant = questions.filter((item) => item.section === "quant");
   const verbal = questions.filter((item) => item.section === "verbal");
-  const dayLabel = studyDayLabel(profile.createdAt);
+  const dayLabel = studyDayLabel(profile.createdAt, plan.planDate);
   const resumeId = questions.find((item) => !done.has(item.questionId))?.questionId;
 
   return (
@@ -70,19 +66,18 @@ export default async function TodayPage() {
               </li>
             );
           })}
+          {writingItem ? (
+            <li className={questions.length ? "border-t border-line" : ""}>
+              <Link href="/writing" className="flex items-center justify-between gap-4 px-5 py-4 hover:bg-paper">
+                <span>
+                  <span className="block text-[11px] font-semibold tracking-[0.14em] text-muted uppercase">Writing</span>
+                  <span className="mt-0.5 block font-medium">{writingItem.title}</span>
+                </span>
+                <span className="shrink-0 text-sm font-semibold text-muted">Start</span>
+              </Link>
+            </li>
+          ) : null}
         </ol>
-        {prompt && writingItem ? (
-          <div id="writing">
-          <WritingPanel
-            day={prompt.day}
-            theme={prompt.theme}
-            prompt={prompt.prompt}
-            task={prompt.task}
-            template={writing.template}
-            canGrade={tier === "pass_90" || tier === "admin"}
-          />
-          </div>
-        ) : null}
       </main>
     </AppShell>
   );

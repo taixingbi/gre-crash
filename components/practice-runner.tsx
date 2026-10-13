@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { QuestionBody } from "@/components/question-body";
+import { choiceAnswerLetters, QuestionBody } from "@/components/question-body";
 import { TutorChat } from "@/components/tutor-chat";
 import { submitAnswerAction, tagWrongAction, toggleBookmarkAction } from "@/lib/actions";
 import type { ErrorTag, PublicQuestion } from "@/lib/types";
@@ -34,13 +34,17 @@ export function PracticeRunner({
   }, []);
   const [selected, setSelected] = useState<string[]>([]);
   const [numeric, setNumeric] = useState("");
-  const [result, setResult] = useState<{ correct: boolean; answer: string; review?: boolean } | null>(null);
+  const [numerator, setNumerator] = useState("");
+  const [denominator, setDenominator] = useState("");
+  const fraction = /as a fraction/i.test(`${question.prompt || ""}\n${question.stem || ""}`);
+  const [result, setResult] = useState<{ correct: boolean; answer: string } | null>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [marked, setMarked] = useState(bookmarked);
   const [tagged, setTagged] = useState(false);
 
-  const answerValue = question.questionType === "numeric" ? numeric.trim() : selected.join("");
+  const fractionValue = numerator.trim() && denominator.trim() ? `${numerator.trim()}/${denominator.trim()}` : "";
+  const answerValue = question.questionType === "numeric" ? (fraction ? fractionValue : numeric.trim()) : selected.join("");
 
   async function submit() {
     setPending(true);
@@ -59,7 +63,6 @@ export function PracticeRunner({
       setResult({
         correct: response.correct,
         answer: response.answer,
-        review: "review" in response && response.review === true,
       });
       router.refresh();
     }
@@ -103,9 +106,28 @@ export function PracticeRunner({
         </div>
       ) : null}
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5">
-      <QuestionBody question={question} selected={selected} onToggle={toggle} disabled={Boolean(result)} plain />
+      <QuestionBody question={question} selected={selected} onToggle={toggle} disabled={Boolean(result)} plain answer={result?.answer} />
 
-      {question.questionType === "numeric" ? (
+      {question.questionType === "numeric" && fraction ? (
+        <div className="flex flex-col items-start gap-1">
+          <p className="text-sm text-muted">Your answer</p>
+          <input
+            aria-label="Numerator"
+            value={numerator}
+            onChange={(event) => setNumerator(event.target.value)}
+            disabled={Boolean(result)}
+            className="h-10 w-28 border border-ink bg-white text-center text-base"
+          />
+          <div className="h-px w-36 bg-ink" />
+          <input
+            aria-label="Denominator"
+            value={denominator}
+            onChange={(event) => setDenominator(event.target.value)}
+            disabled={Boolean(result)}
+            className="h-10 w-28 border border-ink bg-white text-center text-base"
+          />
+        </div>
+      ) : question.questionType === "numeric" ? (
         <label className="block text-sm">
           Your answer
           <input
@@ -122,24 +144,25 @@ export function PracticeRunner({
       ) : null}
 
       {error ? <p className="text-sm text-clay">{error}</p> : null}
-      </div>
-      <div className="flex justify-end border-t border-[#e4ddd0] px-5 py-3">
-      {!result ? (
-        <button
-          type="button"
-          disabled={pending || answerValue.length === 0}
-          onClick={submit}
-          className="rounded-xl bg-violet px-5 py-2 text-sm font-semibold text-white disabled:opacity-40"
-        >
-          {pending ? "Checking…" : "Submit answer"}
-        </button>
-      ) : (
-        <div className="w-full space-y-4">
-          <p className={`font-serif text-2xl ${result.review ? "text-ink" : result.correct ? "text-pine" : "text-clay"}`}>
-            {result.review ? "Check this key" : result.correct ? "Correct" : "Incorrect"}
-          </p>
-          <p className="text-sm">Answer: {result.answer}</p>
-          {!result.correct && !result.review && !tagged ? (
+      {result ? (
+        <div className="space-y-3 border-t border-[#e4ddd0] pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className={`text-lg font-semibold ${result.correct ? "text-pine" : "text-clay"}`}>
+                {result.correct ? "Correct" : "Incorrect"}
+              </p>
+              {choiceAnswerLetters(
+                result.answer,
+                (question.choiceItems?.length ? question.choiceItems : question.choices.map((choice) => ({ letter: choice.slice(0, 1), text: "" }))).map((item) => item.letter),
+              ) ? null : (
+                <p className="text-sm">Answer: {result.answer}</p>
+              )}
+            </div>
+            <Link href={nextHref} className="rounded-md bg-pine px-4 py-2.5 text-sm font-semibold text-paper">
+              {nextLabel}
+            </Link>
+          </div>
+          {!result.correct && !tagged ? (
             <div className="space-y-2">
               <p className="text-sm">What kind of miss was this?</p>
               <div className="flex flex-wrap gap-2">
@@ -159,14 +182,23 @@ export function PracticeRunner({
               </div>
             </div>
           ) : null}
-          <Link href={nextHref} className="inline-block rounded-md bg-pine px-4 py-2.5 text-sm font-semibold text-paper">
-            {nextLabel}
-          </Link>
         </div>
-      )}
+      ) : null}
       </div>
+      {!result ? (
+      <div className="flex justify-end border-t border-[#e4ddd0] px-5 py-3">
+        <button
+          type="button"
+          disabled={pending || answerValue.length === 0}
+          onClick={submit}
+          className="rounded-xl bg-violet px-5 py-2 text-sm font-semibold text-white disabled:opacity-40"
+        >
+          {pending ? "Checking…" : "Submit answer"}
+        </button>
       </div>
-      <TutorChat questionId={question.id} selected={answerValue} enabled={aiEnabled} />
+      ) : null}
+      </div>
+      <TutorChat questionId={question.id} section={question.section} selected={answerValue} enabled={aiEnabled} />
     </div>
   );
 }

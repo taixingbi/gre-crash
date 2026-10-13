@@ -1,16 +1,20 @@
 "use server";
 
 import { randomUUID } from "crypto";
-import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import Stripe from "stripe";
 import { hasFullAccess, FREE_DAILY_LIMIT } from "./access";
-import { aiConfigured, explainQuestion, gradeEssay, similarQuestion, tutorReply } from "./ai";
+import { aiConfigured, essayTutorReply, explainQuestion, gradeEssay, similarQuestion, tutorReply } from "./ai";
 import {
   addAttempt,
   addGenerated,
   accountTier,
   addWriting,
+  deleteWriting,
+  getWriting,
+  updateWriting,
   currentUser,
   getProfile,
   listAttempts,
@@ -24,10 +28,11 @@ import {
   toggleBookmark,
 } from "./data";
 import { dateKey, todayKey } from "./dates";
-import { findQuestion, isDiagnosticId } from "./questions";
-import type { ErrorTag, Profile } from "./types";
+import { courseDates, studyDates } from "./study-day";
+import { findQuestion, isDiagnosticId, loadWriting } from "./questions";
+import type { ErrorTag, EssayRubric, Profile, RubricScore } from "./types";
 
-export type ActionState = { error?: string; message?: string };
+export type ActionState = { error?: string; message?: string; rubric?: EssayRubric };
 
 function numberOrNull(value: FormDataEntryValue | null) {
   const text = String(value ?? "").trim();
@@ -66,6 +71,26 @@ export async function signInAction(_state: ActionState, formData: FormData): Pro
 export async function signOutAction() {
   await signOut();
   redirect("/");
+}
+
+export async function selectStudyDayAction(planDate: string) {
+  const user = await requireUser();
+  const profile = await getProfile(user.id);
+  if (!profile) return;
+  const tier = await accountTier(user.id);
+  const dates = tier === "admin" ? courseDates(profile.createdAt, profile.testDate) : studyDates(profile.createdAt);
+  const allowed = dates.some((item) => item.planDate === planDate);
+  if (!allowed) return;
+  const proto = (await headers()).get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const jar = await cookies();
+  jar.set("gre-plan-date", planDate, {
+    path: "/",
+    sameSite: "lax",
+    httpOnly: true,
+    secure: proto === "https",
+    maxAge: 60 * 60 * 24 * 40,
+  });
+  revalidatePath("/", "layout");
 }
 
 export async function saveProfileAction(_state: ActionState, formData: FormData): Promise<ActionState> {
@@ -140,9 +165,6 @@ export async function submitAnswerAction(input: { questionId: string; selected: 
       return { error: "The free plan includes 5 bank questions a day. The 30-day pass opens the full bank." };
     }
   }
-  if (question.parseStatus !== "ok") {
-    return { correct: false, answer: question.answer || "This key needs a manual check.", review: true as const };
-  }
   const selected = question.questionType === "numeric" ? input.selected.trim() : normalizeSelection(input.selected);
   const expected = question.questionType === "numeric" ? question.answer.trim() : normalizeSelection(question.answer);
   const correct = selected.length > 0 && selected === expected;
@@ -181,7 +203,7 @@ export async function toggleBookmarkAction(questionId: string) {
 
 export async function askAiAction(input: {
   questionId: string;
-  kind: "why_correct" | "why_wrong" | "faster" | "zh" | "similar";
+  kind: "why_correct" | "why_wrong" | "faster" | "zh" | "similar" | "translate" | "choices" | "logic" | "why_fit" | "eliminate";
   selected: string;
 }) {
   const user = await requireUser();
@@ -213,6 +235,32 @@ export async function askTutorAction(input: {
     .filter((turn) => (turn.role === "user" || turn.role === "assistant") && typeof turn.content === "string")
     .slice(-8);
   const text = await tutorReply(question, input.selected, turns, message);
+  return { text };
+}
+
+export async function askEssayTutorAction(input: {
+  prompt: string;
+  task: string;
+  draft: string;
+  turns: { role: "user" | "assistant"; content: string }[];
+  message: string;
+}) {
+  const user = await requireUser();
+  const tier = await accountTier(user.id);
+  if (!hasFullAccess(tier)) return { error: "Writing AI is part of the 90-day pass." };
+  if (!aiConfigured()) return { error: "Nova Pro is not configured on this server." };
+  const message = input.message.trim();
+  if (!message) return { error: "Type a question first." };
+  const turns = (input.turns || [])
+    .filter((turn) => (turn.role === "user" || turn.role === "assistant") && typeof turn.content === "string")
+    .slice(-8);
+  const text = await essayTutorReply({
+    prompt: String(input.prompt ?? "").slice(0, 2000),
+    task: String(input.task ?? "").slice(0, 1000),
+    draft: String(input.draft ?? "").slice(0, 6000),
+    turns,
+    message: message.slice(0, 800),
+  });
   return { text };
 }
 
@@ -301,18 +349,83 @@ export async function finishDiagnosticAction() {
   redirect("/today");
 }
 
-export async function submitEssayAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+const rubricScores = new Set<RubricScore>(["Good", "Needs work", "Weak"]);
+
+function rubricText(rubric: EssayRubric) {
+  return `Thesis: ${rubric.thesis}\nOrganization: ${rubric.organization}\nEvidence: ${rubric.evidence}\nCounterargument: ${rubric.counterargument}\n\n${rubric.advice}`;
+}
+
+function rubricFromForm(value: FormDataEntryValue | null): EssayRubric | undefined {
+  const text = String(value ?? "").trim();
+  if (!text) return undefined;
+  try {
+    const parsed = JSON.parse(text) as Partial<EssayRubric>;
+    if (!rubricScores.has(parsed.thesis as RubricScore)) return undefined;
+    if (!rubricScores.has(parsed.organization as RubricScore)) return undefined;
+    if (!rubricScores.has(parsed.evidence as RubricScore)) return undefined;
+    if (!rubricScores.has(parsed.counterargument as RubricScore)) return undefined;
+    return {
+      thesis: parsed.thesis as RubricScore,
+      organization: parsed.organization as RubricScore,
+      evidence: parsed.evidence as RubricScore,
+      counterargument: parsed.counterargument as RubricScore,
+      advice: typeof parsed.advice === "string" ? parsed.advice : "",
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+export async function scoreEssayAction(_state: ActionState, formData: FormData): Promise<ActionState> {
   const user = await requireUser();
   const tier = await accountTier(user.id);
   if (!hasFullAccess(tier)) return { error: "Writing AI is part of the 90-day pass." };
   if (!aiConfigured()) return { error: "Nova Pro is not configured on this server." };
-  const essay = String(formData.get("essay") ?? "").trim();
-  const prompt = String(formData.get("prompt") ?? "").trim();
-  const day = Number(formData.get("day") ?? 1);
-  if (essay.split(/\s+/).length < 80) return { error: "Write at least 80 words before asking for a score." };
+  const id = String(formData.get("id") ?? "");
+  let essay = String(formData.get("essay") ?? "").trim();
+  let day = Number(formData.get("day") ?? 1);
+  const existing = id ? await getWriting(user.id, id) : null;
+  if (id && (!existing || existing.userId !== user.id)) return { error: "That essay is no longer saved." };
+  if (existing) {
+    if (!essay) essay = existing.essay;
+    day = existing.day;
+  }
+  if (!essay) return { error: "Write something before scoring." };
+  const prompt = String(formData.get("prompt") ?? "").trim() || loadWriting().prompts.find((item) => item.day === day)?.prompt || "";
   const rubric = await gradeEssay(prompt, essay);
-  await addWriting(user.id, day, essay, rubric);
-  return {
-    message: `Thesis: ${rubric.thesis}\nOrganization: ${rubric.organization}\nEvidence: ${rubric.evidence}\nCounterargument: ${rubric.counterargument}\n\n${rubric.advice}`,
-  };
+  if (existing) {
+    await updateWriting({ ...existing, essay, rubric });
+    revalidatePath("/writing");
+  }
+  return { message: rubricText(rubric), rubric };
+}
+
+export async function saveEssayAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  const essay = String(formData.get("essay") ?? "").trim();
+  if (!essay) return { error: "Write something before saving." };
+  const day = Number(formData.get("day") ?? 1);
+  await addWriting(user.id, day, essay, rubricFromForm(formData.get("rubric")));
+  revalidatePath("/writing");
+  return { message: "Saved to history." };
+}
+
+export async function updateEssayAction(_state: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const essay = String(formData.get("essay") ?? "").trim();
+  if (!essay) return { error: "Write something before saving." };
+  const existing = await getWriting(user.id, id);
+  if (!existing || existing.userId !== user.id) return { error: "That essay is no longer saved." };
+  await updateWriting({ ...existing, essay });
+  revalidatePath("/writing");
+  return { message: "Saved." };
+}
+
+export async function deleteEssayAction(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get("id") ?? "");
+  const existing = await getWriting(user.id, id);
+  if (existing && existing.userId === user.id) await deleteWriting(user.id, id);
+  revalidatePath("/writing");
 }

@@ -193,6 +193,9 @@ export const localDb = {
   getPlan(userId: string, planDate: string) {
     return load().plans.find((plan) => plan.userId === userId && plan.planDate === planDate) ?? null;
   },
+  listPlans(userId: string) {
+    return load().plans.filter((plan) => plan.userId === userId);
+  },
   savePlan(plan: StudyPlan) {
     const db = load();
     const index = db.plans.findIndex((item) => item.userId === plan.userId && item.planDate === plan.planDate);
@@ -203,7 +206,23 @@ export const localDb = {
   writings(userId: string) {
     return load().writings.filter((item) => item.userId === userId);
   },
-  addWriting(userId: string, day: number, essay: string, rubric: EssayRubric) {
+  getWriting(userId: string, id: string) {
+    return load().writings.find((item) => item.userId === userId && item.id === id) ?? null;
+  },
+  updateWriting(submission: WritingSubmission) {
+    const db = load();
+    const index = db.writings.findIndex((item) => item.userId === submission.userId && item.id === submission.id);
+    if (index === -1) return submission;
+    db.writings[index] = submission;
+    save(db);
+    return submission;
+  },
+  deleteWriting(userId: string, id: string) {
+    const db = load();
+    db.writings = db.writings.filter((item) => !(item.userId === userId && item.id === id));
+    save(db);
+  },
+  addWriting(userId: string, day: number, essay: string, rubric?: EssayRubric) {
     const db = load();
     const submission: WritingSubmission = {
       id: randomUUID(),

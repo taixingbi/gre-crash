@@ -188,10 +188,14 @@ export const dynamoDb = {
     const item = await get(`USER#${userId}`, `PLAN#${planDate}`);
     return (item?.plan as StudyPlan | undefined) ?? null;
   },
+  async listPlans(userId: string) {
+    const items = await query(`USER#${userId}`, "PLAN#");
+    return items.map((item) => item.plan as StudyPlan);
+  },
   async savePlan(plan: StudyPlan) {
     await put({ pk: `USER#${plan.userId}`, sk: `PLAN#${plan.planDate}`, plan });
   },
-  async addWriting(userId: string, day: number, essay: string, rubric: EssayRubric) {
+  async addWriting(userId: string, day: number, essay: string, rubric?: EssayRubric) {
     const submission: WritingSubmission = {
       id: randomUUID(),
       userId,
@@ -202,6 +206,25 @@ export const dynamoDb = {
     };
     await put({ pk: `USER#${userId}`, sk: `WRITING#${submission.id}`, submission });
     return submission;
+  },
+  async listWritings(userId: string) {
+    const items = await query(`USER#${userId}`, "WRITING#");
+    return items
+      .map((item) => item.submission as WritingSubmission)
+      .filter((item) => item && typeof item.essay === "string")
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  },
+  async getWriting(userId: string, id: string) {
+    const item = await get(`USER#${userId}`, `WRITING#${id}`);
+    const submission = item?.submission as WritingSubmission | undefined;
+    return submission && typeof submission.essay === "string" ? submission : null;
+  },
+  async updateWriting(submission: WritingSubmission) {
+    await put({ pk: `USER#${submission.userId}`, sk: `WRITING#${submission.id}`, submission });
+    return submission;
+  },
+  async deleteWriting(userId: string, id: string) {
+    await client.send(new DeleteCommand({ TableName: table(), Key: { pk: `USER#${userId}`, sk: `WRITING#${id}` } }));
   },
   async subscription(userId: string) {
     const item = await get(`USER#${userId}`, "SUB");

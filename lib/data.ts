@@ -2,7 +2,7 @@ import { cookies, headers } from "next/headers";
 import { resolveTier } from "./access";
 import { dynamoDb } from "./dynamo-db";
 import { localDb } from "./local-db";
-import type { Attempt, ErrorTag, EssayRubric, Profile, Question, StudyPlan, Subscription, Tier, User } from "./types";
+import type { Attempt, ErrorTag, EssayRubric, Profile, Question, StudyPlan, Subscription, Tier, User, WritingSubmission } from "./types";
 
 export const SESSION_COOKIE = "gre_session";
 
@@ -99,12 +99,33 @@ export async function getPlan(userId: string, planDate: string) {
   return remote() ? dynamoDb.getPlan(userId, planDate) : localDb.getPlan(userId, planDate);
 }
 
+export async function listPlans(userId: string) {
+  return remote() ? dynamoDb.listPlans(userId) : localDb.listPlans(userId);
+}
+
 export async function savePlan(plan: StudyPlan) {
   return remote() ? dynamoDb.savePlan(plan) : localDb.savePlan(plan);
 }
 
-export async function addWriting(userId: string, day: number, essay: string, rubric: EssayRubric) {
+export async function addWriting(userId: string, day: number, essay: string, rubric?: EssayRubric) {
   return remote() ? dynamoDb.addWriting(userId, day, essay, rubric) : localDb.addWriting(userId, day, essay, rubric);
+}
+
+export async function listWritings(userId: string) {
+  const rows = remote() ? await dynamoDb.listWritings(userId) : localDb.writings(userId);
+  return [...rows].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function getWriting(userId: string, id: string) {
+  return remote() ? dynamoDb.getWriting(userId, id) : localDb.getWriting(userId, id);
+}
+
+export async function updateWriting(submission: WritingSubmission) {
+  return remote() ? dynamoDb.updateWriting(submission) : localDb.updateWriting(submission);
+}
+
+export async function deleteWriting(userId: string, id: string) {
+  return remote() ? dynamoDb.deleteWriting(userId, id) : localDb.deleteWriting(userId, id);
 }
 
 export async function getSubscription(userId: string): Promise<Subscription | null> {

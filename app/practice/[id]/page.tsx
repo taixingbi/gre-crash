@@ -21,7 +21,8 @@ export default async function PracticePage({
   const { user, tier } = await requireViewer();
   const profile = await getProfile(user.id);
   if (!profile) redirect("/onboarding");
-  const dayLabel = studyDayLabel(profile.createdAt);
+  const plan = await ensureTodayPlan(user.id);
+  const dayLabel = studyDayLabel(profile.createdAt, plan?.planDate);
   const question = findQuestion(id, await listGenerated(user.id));
   if (!question) notFound();
   const attempts = await listAttempts(user.id);
@@ -30,7 +31,6 @@ export default async function PracticePage({
   const answeredToday = attempts.some((attempt) => attempt.questionId === id && dateKey(attempt.createdAt) === today);
   const blocked = tier === "free" && !isDiagnosticId(id) && !answeredToday && used >= FREE_DAILY_LIMIT;
   const bookmarks = await listBookmarks(user.id);
-  const plan = await ensureTodayPlan(user.id);
   const queue = plan?.items.filter((item) => item.kind === "question").map((item) => item.questionId) ?? [];
   const place = queue.indexOf(id);
   const bank = loadQuestions();

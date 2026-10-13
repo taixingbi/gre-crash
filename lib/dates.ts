@@ -16,8 +16,13 @@ export function dateKey(iso: string, timeZone = process.env.PLAN_TIMEZONE || "Am
   }).format(new Date(iso));
 }
 
-export function studyDayLabel(createdAt: string) {
-  const day = Math.max(1, daysBetween(dateKey(createdAt), todayKey()) + 1);
+export function addDays(from: string, days: number) {
+  const start = Date.parse(`${from}T00:00:00Z`);
+  return new Date(start + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+export function studyDayLabel(createdAt: string, planDate = todayKey()) {
+  const day = Math.max(1, daysBetween(dateKey(createdAt), planDate) + 1);
   return `Day ${day}`;
 }
 

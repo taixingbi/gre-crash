@@ -31,6 +31,7 @@ export type Question = {
   table?: QuestionTable | null;
   answer: string;
   hasImage: boolean;
+  figure?: boolean;
   stem: string;
   parseStatus: string;
   aiGenerated?: boolean;
@@ -124,7 +125,7 @@ export type WritingSubmission = {
   userId: string;
   day: number;
   essay: string;
-  rubric: EssayRubric;
+  rubric?: EssayRubric;
   createdAt: string;
 };
 

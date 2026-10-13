@@ -45,6 +45,10 @@ export function questionImagePath(id: string) {
   return path.join(contentDir, "pages", `${id}.png`);
 }
 
+export function questionFigurePath(id: string) {
+  return path.join(contentDir, "figures", `${id}.png`);
+}
+
 export function findQuestion(id: string, generated: Question[] = []) {
   return generated.find((question) => question.id === id) ?? loadQuestions().find((question) => question.id === id) ?? null;
 }
@@ -61,6 +65,7 @@ export function toPublic(question: Question): PublicQuestion {
     prompt: question.prompt,
     table: question.table,
     hasImage: question.hasImage,
+    figure: question.figure,
     stem: question.stem,
     parseStatus: question.parseStatus,
     aiGenerated: question.aiGenerated,

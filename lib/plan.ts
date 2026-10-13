@@ -49,6 +49,7 @@ function pickSection(
   questions: Question[],
   attempts: Attempt[],
   wrongs: WrongQuestion[],
+  blocked: Set<string>,
 ) {
   const latest = latestAttempts(attempts);
   const seen = new Set(attempts.map((attempt) => attempt.questionId));
@@ -56,9 +57,9 @@ function pickSection(
   const chosen: Question[] = [];
   const used = new Set<string>();
 
-  const take = (pool: Question[], needed: number) => {
+  const take = (pool: Question[], needed: number, allowBlocked = false) => {
     const ranked = pool
-      .filter((question) => !used.has(question.id))
+      .filter((question) => !used.has(question.id) && (allowBlocked || !blocked.has(question.id)))
       .sort((a, b) => priority(a) - priority(b) || a.number - b.number);
     for (const question of ranked.slice(0, needed)) {
       chosen.push(question);
@@ -88,6 +89,13 @@ function pickSection(
       );
     }
   }
+  if (chosen.length < count) {
+    take(
+      questions.filter((question) => question.section === section && !question.aiGenerated),
+      count - chosen.length,
+      true,
+    );
+  }
   return chosen;
 }
 
@@ -100,6 +108,7 @@ export function buildStudyPlan(input: {
   attempts: Attempt[];
   wrongs: WrongQuestion[];
   writingTitle: string;
+  blockedIds?: string[];
 }): StudyPlan {
   const mode = input.tier === "pass_90" || input.tier === "admin" ? "adaptive" : "static";
   const dayIndex = Math.max(1, daysBetween(dateKey(input.profile.createdAt), input.planDate) + 1);
@@ -118,8 +127,9 @@ export function buildStudyPlan(input: {
     verbalCount = clamp(Math.round((budget * 0.45) / 1.25), 6, cap);
   }
 
-  const quant = pickSection("quant", quantCount, mode, dayIndex, input.questions, input.attempts, input.wrongs);
-  const verbal = pickSection("verbal", verbalCount, mode, dayIndex, input.questions, input.attempts, input.wrongs);
+  const blocked = new Set(input.blockedIds ?? []);
+  const quant = pickSection("quant", quantCount, mode, dayIndex, input.questions, input.attempts, input.wrongs, blocked);
+  const verbal = pickSection("verbal", verbalCount, mode, dayIndex, input.questions, input.attempts, input.wrongs, blocked);
   const items: PlanItem[] = [
     ...quant.map((question) => ({
       kind: "question" as const,
