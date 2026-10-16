@@ -22,7 +22,7 @@ export function addDays(from: string, days: number) {
 }
 
 export function studyDayLabel(createdAt: string, planDate = todayKey()) {
-  const day = Math.max(1, daysBetween(dateKey(createdAt), planDate) + 1);
+  const day = Math.min(10, Math.max(1, daysBetween(dateKey(createdAt), planDate) + 1));
   return `Day ${day}`;
 }
 

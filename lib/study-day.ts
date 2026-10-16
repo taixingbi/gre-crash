@@ -12,7 +12,9 @@ const COURSE_DAYS = 10;
 
 export function studyDates(createdAt: string, through = todayKey()): StudyDay[] {
   const start = dateKey(createdAt);
-  const end = daysBetween(start, through) >= 0 ? through : start;
+  const courseEnd = addDays(start, COURSE_DAYS - 1);
+  let end = daysBetween(start, through) >= 0 ? through : start;
+  if (end > courseEnd) end = courseEnd;
   const count = Math.max(1, daysBetween(start, end) + 1);
   return Array.from({ length: count }, (_, index) => ({
     day: index + 1,
@@ -21,15 +23,9 @@ export function studyDates(createdAt: string, through = todayKey()): StudyDay[] 
 }
 
 export function courseDates(createdAt: string, testDate: string | null) {
+  void testDate;
   const start = dateKey(createdAt);
-  const today = todayKey();
-  const courseEnd = addDays(start, COURSE_DAYS - 1);
-  const test = testDate?.slice(0, 10) ?? "";
-  const cap = addDays(start, 89);
-  let end = courseEnd > today ? courseEnd : today;
-  if (test && daysBetween(start, test) >= 0 && test > end) end = test;
-  if (end > cap) end = cap;
-  return studyDates(createdAt, end);
+  return studyDates(createdAt, addDays(start, COURSE_DAYS - 1));
 }
 
 export async function selectedPlanDate(createdAt: string, dates = studyDates(createdAt)) {

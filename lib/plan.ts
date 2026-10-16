@@ -154,7 +154,7 @@ export function buildStudyPlan(input: {
       ? `${daysLeft} ${daysLeft === 1 ? "day" : "days"} until the GRE`
       : mode === "static"
         ? `Day ${Math.min(dayIndex, 10)} of 10`
-        : `Day ${dayIndex}`;
+        : `Day ${Math.min(dayIndex, 10)}`;
 
   return {
     userId: input.userId,

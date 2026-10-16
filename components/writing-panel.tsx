@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { WritingTutor } from "@/components/writing-tutor";
 import { essayPhrases } from "@/lib/essay-phrases";
+import { essayTemplateExample } from "@/lib/essay-template";
 import { essayWords } from "@/lib/essay-words";
 import { deleteEssayAction, saveEssayAction, scoreEssayAction, updateEssayAction, type ActionState } from "@/lib/actions";
 import type { EssayRubric, WritingSubmission } from "@/lib/types";
@@ -175,6 +176,15 @@ function WritingPanel({
         <summary className="cursor-pointer text-sm font-semibold">Four-paragraph template</summary>
         <div className="mt-3 max-h-72 overflow-y-auto">
           <pre className="whitespace-pre-wrap font-sans text-sm leading-6 text-muted">{template}</pre>
+        </div>
+        <div className="mt-4 max-h-72 space-y-3 overflow-y-auto border-t border-line pr-1 pt-3">
+          <p className="text-sm font-semibold text-ink">Example for this day</p>
+          {essayTemplateExample(day).map((part) => (
+            <div key={part.title} className="rounded-md bg-paper px-3 py-2 text-sm leading-6">
+              <p className="font-medium">{part.title}</p>
+              <p className="mt-1 text-muted">{part.text}</p>
+            </div>
+          ))}
         </div>
       </details>
       <details open>
