@@ -89,7 +89,9 @@ function passageFromStem(stem: string) {
   if (blank < 0) return null;
   const marks = [...stem.slice(0, blank).matchAll(/(?:^|\n)\s*\d+\.\s+/g)];
   const mark = marks.at(-1);
-  const start = mark ? (mark.index ?? 0) + mark[0].length : Math.max(0, blank - 500);
+  // Without a booklet number there is nothing to carve out, and cutting at the blank's sentence would drop the rest of the prompt.
+  if (!mark) return null;
+  const start = (mark.index ?? 0) + mark[0].length;
   const after = stem.slice(blank);
   const end = after.search(/[.?!]/);
   return stem

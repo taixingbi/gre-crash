@@ -24,13 +24,24 @@ export const VERBAL_CATEGORIES = [
   "Long Reading / Argument",
 ];
 
+// Some source pages were cropped above their choices, and some answer keys name a choice that never made it
+// through OCR or give one letter for a multi-blank question. Those can't be marked fairly, so keep them out.
+function answerable(question: Question) {
+  if (question.questionType === "numeric") return true;
+  const letters = new Set((question.choiceItems ?? []).map((item) => item.letter));
+  if (!letters.size) return false;
+  const answer = question.answer.replace(/\s+/g, "");
+  if (/^[A-I]+$/.test(answer) && [...answer].some((letter) => !letters.has(letter))) return false;
+  const blanks = ["(i)", "(ii)", "(iii)"].filter((blank) => (question.prompt ?? "").includes(blank)).length;
+  return !(question.category.includes("Multi-Blank") && blanks >= 2 && answer.length !== blanks);
+}
+
 export function loadQuestions(): Question[] {
   if (process.env.NODE_ENV === "production" && bankCache) return bankCache;
   const file = path.join(contentDir, "questions.json");
   if (!fs.existsSync(file)) return [];
   const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as { questions: Question[] };
-  // A few source pages were cropped above their choices; without choices there is nothing to answer.
-  bankCache = parsed.questions.filter((question) => question.questionType === "numeric" || Boolean(question.choiceItems?.length));
+  bankCache = parsed.questions.filter(answerable);
   return bankCache;
 }
 
