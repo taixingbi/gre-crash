@@ -72,17 +72,15 @@ async function repairCopies(userId: string, profile: Profile, plans: StudyPlan[]
   return current;
 }
 
-const removedQuestions = new Set(["quant-098", "quant-099", "quant-123", "quant-124", "quant-019", "quant-023", "quant-024", "quant-027", "quant-074", "quant-025", "quant-048", "quant-104", "quant-127", "quant-143"]);
-
-function applyLiveQuestions(plan: StudyPlan): StudyPlan {
-  const byId = new Map(loadQuestions().map((question) => [question.id, question]));
+// Saved plans can name questions that have since left the bank; drop those so the sidebar never links to a 404.
+async function applyLiveQuestions(userId: string, plan: StudyPlan): Promise<StudyPlan> {
+  const byId = new Map([...loadQuestions(), ...(await listGenerated(userId))].map((question) => [question.id, question]));
   return {
     ...plan,
     items: plan.items.flatMap((item): PlanItem[] => {
       if (item.kind !== "question") return [item];
-      if (removedQuestions.has(item.questionId)) return [];
       const live = byId.get(item.questionId);
-      if (!live) return [item];
+      if (!live) return [];
       return [{ ...item, section: live.section, category: live.category }];
     }),
   };
@@ -92,7 +90,7 @@ async function ensurePlan(userId: string, profile: Profile, planDate: string): P
   const attempts = await listAttempts(userId);
   const plans = await repairCopies(userId, profile, await listPlans(userId), attempts);
   const existing = plans.find((plan) => plan.planDate === planDate);
-  if (existing) return applyLiveQuestions(existing);
+  if (existing) return applyLiveQuestions(userId, existing);
   const blocked = plans.flatMap((plan) => questionIds(plan));
-  return applyLiveQuestions(await createPlan(userId, profile, planDate, blocked, attempts));
+  return applyLiveQuestions(userId, await createPlan(userId, profile, planDate, blocked, attempts));
 }
