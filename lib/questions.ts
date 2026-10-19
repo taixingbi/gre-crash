@@ -29,7 +29,8 @@ export function loadQuestions(): Question[] {
   const file = path.join(contentDir, "questions.json");
   if (!fs.existsSync(file)) return [];
   const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as { questions: Question[] };
-  bankCache = parsed.questions;
+  // A few source pages were cropped above their choices; without choices there is nothing to answer.
+  bankCache = parsed.questions.filter((question) => question.questionType === "numeric" || Boolean(question.choiceItems?.length));
   return bankCache;
 }
 
