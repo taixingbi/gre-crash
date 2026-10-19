@@ -299,13 +299,10 @@ function ChoiceRow({
 }) {
   const words = text.trim() || letter;
 
-  function copyWords(event: React.MouseEvent<HTMLSpanElement>) {
-    const range = document.createRange();
-    range.selectNodeContents(event.currentTarget);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    void navigator.clipboard.writeText(words).catch(() => {
+  function copyWord() {
+    const word = window.getSelection()?.toString().trim();
+    if (!word) return;
+    void navigator.clipboard.writeText(word).catch(() => {
       document.execCommand("copy");
     });
   }
@@ -330,7 +327,7 @@ function ChoiceRow({
           {filled ? <span className={`${multiple ? "h-2.5 w-2.5 rounded-[2px]" : "h-2 w-2 rounded-full"} ${dot}`} /> : null}
         </span>
       </button>
-      <span onDoubleClick={copyWords} className="select-text pt-0.5">
+      <span onDoubleClick={copyWord} className="select-text pt-0.5">
         <span className="mr-2 font-semibold">{letter}.</span>
         <FractionText text={text} />
       </span>
