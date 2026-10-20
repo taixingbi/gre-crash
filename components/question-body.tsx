@@ -165,6 +165,8 @@ function FractionText({ text }: { text: string }) {
       );
     }
     const match = part.match(/^([A-Za-z0-9π()²³+\-]+)\/([A-Za-z0-9π()²³+\-]+)$/);
+    // "generosity/hostility" in a passage is a pair of words, not a fraction.
+    if (match && /^[A-Za-z]{3,}$/.test(match[1]) && /^[A-Za-z]{3,}$/.test(match[2])) return <span key={index}>{part}</span>;
     if (!match) return <span key={index}>{withSubscripts(part)}</span>;
     let numerator = match[1];
     let denominator = match[2];
@@ -203,7 +205,7 @@ const DIRECTIONS = [
   new RegExp(`^${MULTI_DIRECTION.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.?`, "i"),
   new RegExp(`^${SINGLE_DIRECTION.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.?`, "i"),
   /^Consider each of the choices separately and select all that apply\.?/i,
-  /^Questions\s+\d+\s+to\s+\d+\s+are based on (?:this|the following) (?:passage|data)\.?/i,
+  /^Questions?\s+\d+(?:\s*(?:to|and|-)\s*\d+)?\s+(?:is|are) based on (?:this|the following) (?:passage|data)[.:]?/i,
 ];
 
 const DIRECTION_TAILS = [
@@ -236,6 +238,15 @@ function splitDirection(text: string) {
     return { direction, body };
   }
   return { direction: null as string | null, body: cleaned };
+}
+
+// Reading passages run straight into their booklet-numbered question ("... economic profit. 7. Select the sentence ...").
+function splitReading(body: string) {
+  const marks = [...body.matchAll(/([.?!"\u201d])\s+\d{1,2}\.\s+(?=[A-Z])/g)];
+  const mark = marks.at(-1);
+  if (!mark || (mark.index ?? 0) < 100) return null;
+  const at = (mark.index ?? 0) + mark[1].length;
+  return { passage: body.slice(0, at).trim(), question: body.slice(at + mark[0].length - mark[1].length).trim() };
 }
 
 function PromptLine({ text }: { text: string }) {
@@ -362,7 +373,9 @@ export function QuestionBody({
   );
   const comparison = parseComparison(stem);
   const passage = comparison ? null : passageFromStem(stem);
-  const { data, question: prompt } = present(stripBookletNumbers(passage || (comparison ? "" : question.prompt || stem)));
+  const source = stripBookletNumbers(passage || (comparison ? "" : question.prompt || stem));
+  const reading = question.section === "verbal" && !passage ? splitReading(source.replace(/\s+/g, " ").trim()) : null;
+  const { data, question: prompt } = reading ? { data: null, question: reading.passage } : present(source);
   const { direction, body } = splitDirection(prompt);
   const groups = choiceGroups(body, items);
   const correctLetters = answer ? choiceAnswerLetters(answer, items.map((item) => item.letter)) : null;
@@ -434,7 +447,16 @@ export function QuestionBody({
         ) : figureHasText ? null : (
           <div>
             {direction ? <p className="mb-4 rounded-md bg-[#f3efe6] px-3 py-2 text-sm leading-6">{direction}</p> : null}
-            <PromptLine text={body || "This question has no extracted text."} />
+            {reading ? (
+              <>
+                <PromptLine text={body} />
+                <div className="mt-5 border-t border-line pt-4 font-medium">
+                  <PromptLine text={reading.question} />
+                </div>
+              </>
+            ) : (
+              <PromptLine text={body || "This question has no extracted text."} />
+            )}
           </div>
         )}
       </div>

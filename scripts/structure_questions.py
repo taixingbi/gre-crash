@@ -67,7 +67,8 @@ def load_lines(path: Path) -> list[dict]:
                 continue
             if re.fullmatch(r"\d{3}", text) and row["y"] > 0.84:
                 continue
-            built.append({"text": text, "y": row["y"], "x": group[0]["x"], "tokens": group})
+            width = group[-1]["x"] + group[-1]["w"] - group[0]["x"]
+            built.append({"text": text, "y": row["y"], "x": group[0]["x"], "w": width, "tokens": group})
     return built
 
 
@@ -106,21 +107,21 @@ def blank_columns(lines: list[dict]) -> list[dict]:
         for line in lines
         if line["y"] < bottom and not CHOICE.match(line["text"]) and not re.search(r"blank\s*\(", line["text"], re.I)
     ]
-    columns: list[list[dict]] = []
-    for index, header in enumerate(headers):
-        right = headers[index + 1]["x"] if index + 1 < len(headers) else 1
-        column = [line for line in options if header["x"] - 0.12 <= line["x"] < right - 0.03]
-        column.sort(key=lambda line: -line["y"])
-        columns.append(column[:4])
+    # Each option belongs to the header it sits under. Columns are always lettered A-C, D-F, G-I, so a row lost
+    # to a cropped page leaves a gap instead of shifting the next column's letters.
+    centers = [header["x"] + header["w"] / 2 for header in headers]
+    columns: list[list[dict]] = [[] for _ in headers]
+    for line in options:
+        if "#" in line["text"] or "$" in line["text"] or not re.search(r"[A-Za-z]{2,}", line["text"]):
+            continue
+        center = line["x"] + line["w"] / 2
+        columns[min(range(len(centers)), key=lambda index: abs(centers[index] - center))].append(line)
     letters = "ABCDEFGHI"
     choices = []
-    cursor = 0
-    for column in columns:
-        for line in column:
-            if cursor >= len(letters):
-                break
-            choices.append({"letter": letters[cursor], "text": line["text"], "y": line["y"], "x": line["x"]})
-            cursor += 1
+    for index, column in enumerate(columns):
+        column.sort(key=lambda line: -line["y"])
+        for row, line in enumerate(column[:3]):
+            choices.append({"letter": letters[index * 3 + row], "text": line["text"], "y": line["y"], "x": line["x"]})
     return choices if len(choices) >= 4 else []
 
 
