@@ -78,6 +78,9 @@ export function PracticeRunner({
   }
 
   const progress = position && position.total > 0 ? Math.round((position.current / position.total) * 100) : 0;
+  const statedDirections = /select the two answer choices|select one entry for the blank|for each blank select one entry|consider each of the choices separately|select all that apply/i.test(
+    `${question.prompt || ""}\n${question.stem || ""}`,
+  );
 
   return (
     <div className="flex flex-col gap-4 p-4 lg:h-screen lg:flex-row lg:items-stretch lg:p-6">
@@ -139,8 +142,8 @@ export function PracticeRunner({
         </label>
       ) : null}
 
-      {question.questionType === "multi" ? (
-        <p className="text-sm text-muted">Select every correct letter shown on the question.</p>
+      {question.questionType === "multi" && !statedDirections ? (
+        <p className="text-sm text-muted">Select all that apply.</p>
       ) : null}
 
       {error ? <p className="text-sm text-clay">{error}</p> : null}

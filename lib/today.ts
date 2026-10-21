@@ -1,7 +1,7 @@
 import { accountTier, getProfile, listAttempts, listGenerated, listPlans, listWrongs, savePlan } from "./data";
 import { dateKey, daysBetween } from "./dates";
 import { buildStudyPlan } from "./plan";
-import { loadQuestions, loadWriting } from "./questions";
+import { categoriesFor, loadQuestions, loadWriting } from "./questions";
 import { courseDates, selectedPlanDate, studyDates } from "./study-day";
 import type { Attempt, PlanItem, Profile, StudyPlan } from "./types";
 
@@ -72,18 +72,31 @@ async function repairCopies(userId: string, profile: Profile, plans: StudyPlan[]
   return current;
 }
 
+function categoryRank(item: Extract<PlanItem, { kind: "question" }>) {
+  const categories = categoriesFor(item.section);
+  const at = categories.indexOf(item.category);
+  return (item.section === "quant" ? 0 : 100) + (at < 0 ? categories.length : at);
+}
+
+// A saved plan keeps a question in the slot it was given. If that question has since moved to another
+// section or category, put it with the questions of its current category instead of leaving it at the top.
+function groupByCategory(items: PlanItem[]) {
+  const writing = items.filter((item) => item.kind === "writing");
+  const questions = items.flatMap((item, index) => (item.kind === "question" ? [{ item, index }] : []));
+  questions.sort((a, b) => categoryRank(a.item) - categoryRank(b.item) || a.index - b.index);
+  return [...questions.map((entry) => entry.item), ...writing];
+}
+
 // Saved plans can name questions that have since left the bank; drop those so the sidebar never links to a 404.
 async function applyLiveQuestions(userId: string, plan: StudyPlan): Promise<StudyPlan> {
   const byId = new Map([...loadQuestions(), ...(await listGenerated(userId))].map((question) => [question.id, question]));
-  return {
-    ...plan,
-    items: plan.items.flatMap((item): PlanItem[] => {
-      if (item.kind !== "question") return [item];
-      const live = byId.get(item.questionId);
-      if (!live) return [];
-      return [{ ...item, section: live.section, category: live.category }];
-    }),
-  };
+  const items = plan.items.flatMap((item): PlanItem[] => {
+    if (item.kind !== "question") return [item];
+    const live = byId.get(item.questionId);
+    if (!live) return [];
+    return [{ ...item, section: live.section, category: live.category }];
+  });
+  return { ...plan, items: groupByCategory(items) };
 }
 
 async function ensurePlan(userId: string, profile: Profile, planDate: string): Promise<StudyPlan> {

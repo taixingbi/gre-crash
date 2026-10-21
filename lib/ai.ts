@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { cacheGet, cacheSet } from "./data";
 import type { EssayRubric, Question, RubricScore } from "./types";
 
@@ -97,7 +97,7 @@ export async function tutorReply(question: Question, selected: string, turns: { 
     [
       {
         role: "system",
-        content: `You are a GRE tutor beside one question. Answer only the student's latest question about it. Stay short. If they write in Chinese, answer in Chinese. Do not invent numbers. ${PLAIN_MATH}\n\n${questionBrief(question, selected)}`,
+        content: `You are a GRE tutor beside one question. Answer only the student's latest question about it. Stay short. If they write in Chinese, answer in Chinese. If you name the answer, use only the correct-answer letters in the brief. Do not invent numbers. ${PLAIN_MATH}\n\n${questionBrief(question, selected)}`,
       },
       ...history,
       { role: "user", content: message.slice(0, 500) },
@@ -113,7 +113,8 @@ export async function explainQuestion(
   kind: "why_correct" | "why_wrong" | "faster" | "zh" | "translate" | "choices" | "logic" | "why_fit" | "eliminate",
 ) {
   const reading = kind === "choices" && isReading(question.category);
-  const key = `${question.id}:${question.answer}:${kind}:${selected}:${reading ? "reading-v2" : kind === "choices" ? "v6" : "v5"}`;
+  const revision = createHash("sha1").update(`${question.category}\n${question.prompt || question.stem}`).digest("hex").slice(0, 8);
+  const key = `${question.id}:${question.answer}:${kind}:${selected}:${revision}:${reading ? "reading-v2" : kind === "choices" ? "v6" : "v5"}`;
   const cached = await cacheGet(key);
   if (cached) return cached;
   const instruction = {
@@ -126,12 +127,12 @@ export async function explainQuestion(
       ? "This is a reading question. Each choice is a claim, not a vocabulary word.\nFor each choice, write exactly two lines and no labels:\nA. the claim in very simple words\none short sentence saying what that claim means\nBlank line before the next letter.\nDo not use [[ ]]. Do not write \"Meaning:\" or \"Example:\". Do not say which choice is correct.\nExample of the format:\nA. the studies counted too little change\nThey say the spiral varies less than it really does."
       : "For each answer choice that has a word, use exactly these three lines and no labels:\n[[word]]\none very simple definition\none very short everyday sentence that uses the word\nPut a blank line between choices. Never write \"Meaning:\" or \"Example:\". Do not say which choice is correct.\nExample of the format:\n[[calm]]\nnot excited or upset\nThe lake is calm today.",
     logic: "Point out the logic clue that decides the answer: contrast, cause, concession, restatement, or the author's attitude. Do not give the answer yet.",
-    why_fit: "Explain why the correct answer fits that clue. Name the closest trap in one sentence.",
+    why_fit: "Explain why the correct-answer letters in the brief fit the clue. Name the closest trap in one sentence. Do not name a different pair.",
     eliminate: "Say why each wrong choice fails. Name the correct answer only briefly.",
   }[kind];
   const raw = await complete(
     [
-      { role: "system", content: `You are a GRE tutor. Be concrete and short. ${PLAIN_MATH}` },
+      { role: "system", content: `You are a GRE tutor. Be concrete and short. If you name the answer, use only the correct-answer letters in the brief. ${PLAIN_MATH}` },
       { role: "user", content: `${instruction}\n\n${questionBrief(question, selected, reading)}` },
     ],
     { temperature: 0, maxTokens: kind === "choices" ? 900 : 500 },
